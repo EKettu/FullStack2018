@@ -1,9 +1,11 @@
 import React from 'react';
 import Persons from './components/Persons'
 import Form from './components/Form'
-import axios from 'axios'
+import Notification from './components/Notification'
+import personService from './services/persons'
+import './index.css'
 
-//Tehtävät 2.6-2.11
+//Tehtävät 2.6-2.11 ja 2.14-2.19
 
 class App extends React.Component {
   constructor(props) {
@@ -12,17 +14,18 @@ class App extends React.Component {
       persons: [],
       newName: '',
       newNumber: '',
-      filter: ''
+      filter: '',
+      notification: null
     }
-   // console.log('constructor')
+    // console.log('constructor')
   }
 
   componentWillMount() {
-    //console.log('will mount')
-    axios
-      .get('http://localhost:3001/persons')
+    // console.log('will mount')
+    personService
+      .getAll()
       .then(response => {
-       // console.log('promise fulfilled')
+        // console.log('promise fulfilled')
         this.setState({ persons: response.data })
       })
   }
@@ -36,13 +39,66 @@ class App extends React.Component {
     }
 
     if (!this.state.persons.find(person => person.name === personObject.name)) {
-      const persons = this.state.persons.concat(personObject)
+      personService
+        .create(personObject)
+        .then(response => {
+          console.log(response.data)
+          this.setState({
+            persons: this.state.persons.concat(response.data),
+            newName: '',
+            newNumber: '',
+            notification: 'lisättiiin ' + personObject.name
+          })
+          setTimeout(() => {
+            this.setState({ notification: null })
+          }, 3000)
+        })
+    }
+    else {
+      this.changeNumber(personObject)
+    }
+  }
 
-      this.setState({
-        persons: persons,
-        newName: '',
-        newNumber: ''
-      })
+  deletePerson = (id, personObject) => {
+    if (window.confirm('Poistetaanko ' + personObject.name + '?')) {
+      personService
+        .deletePerson(id, personObject)
+        .then(response => {
+          this.setState({
+            persons: this.state.persons.filter(person => person.id !== id),
+            notification: 'poistettiin ' + personObject.name
+          })
+          setTimeout(() => {
+            this.setState({ notification: null })
+          }, 3000)
+        })
+    }
+  }
+
+  changeNumber = (personObject) => {
+    const person = this.state.persons.find(person => person.name === personObject.name)
+    const id = person.id
+    if (window.confirm(person.name + ' on jo luettelossa, korvataanko vanha numero uudella?')) {
+
+      const changedPerson = { ...person, number: this.state.newNumber }
+      personService
+        .update(id, changedPerson)
+        .then(response => {
+          const persons = this.state.persons.filter(person => person.id !== id)
+          this.setState({
+            persons: persons.concat(changedPerson),
+            newName: '',
+            newNumber: '',
+            notification: 'henkilön ' + changedPerson.name + ' numero vaihdettu'
+          })
+          setTimeout(() => {
+            this.setState({ notification: null })
+          }, 3000)
+        })
+        .catch(error => {
+          alert(`henkilö '${person.name}' on jo valitettavasti poistettu palvelimelta`)
+          this.setState({ persons: this.state.persons.filter(person => person.id !== id) })
+        })
     }
   }
 
@@ -65,6 +121,7 @@ class App extends React.Component {
     return (
       <div>
         <h2>Puhelinluettelo</h2>
+        <Notification message={this.state.notification} />
         <div>
           rajaa näytettäviä <input value={this.state.filter}
             onChange={this.handleFiltering} />
@@ -74,7 +131,7 @@ class App extends React.Component {
           newName={this.state.newName} newNumber={this.state.newNumber}
         />
         <h2>Numerot</h2>
-        <Persons persons={this.state.persons} filter={this.state.filter} />
+        <Persons persons={this.state.persons} filter={this.state.filter} deletePerson={this.deletePerson} />
       </div>
     )
   }
